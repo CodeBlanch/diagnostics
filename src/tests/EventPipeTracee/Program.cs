@@ -32,8 +32,9 @@ namespace EventPipeTracee
             string loggerCategory = args[1];
 
             bool diagMetrics = args.Any("DiagMetrics".Equals);
+            bool useActivitySource = args.Any("UseActivitySource".Equals);
 
-            Console.WriteLine($"{pid} EventPipeTracee: DiagMetrics {diagMetrics}");
+            Console.WriteLine($"{pid} EventPipeTracee: DiagMetrics {diagMetrics} UseActivitySource {useActivitySource}");
 
             Console.WriteLine($"{pid} EventPipeTracee: start process");
             Console.Out.Flush();
@@ -56,6 +57,10 @@ namespace EventPipeTracee
             using ILoggerFactory loggerFactory = serviceCollection.BuildServiceProvider().GetService<ILoggerFactory>();
             ILogger customCategoryLogger = loggerFactory.CreateLogger(loggerCategory);
             ILogger appCategoryLogger = loggerFactory.CreateLogger(AppLoggerCategoryName);
+
+            using ActivitySource activitySource = useActivitySource
+                ? new ActivitySource("EventPipeTracee.ActivitySource", version: "1.0.0")
+                : null;
 
             Console.WriteLine($"{pid} EventPipeTracee: {DateTime.UtcNow} Awaiting start");
             Console.Out.Flush();
@@ -89,7 +94,7 @@ namespace EventPipeTracee
                 }).ConfigureAwait(true);
             }
 
-            await TestBodyCore(customCategoryLogger, appCategoryLogger).ConfigureAwait(false);
+            await TestBodyCore(customCategoryLogger, appCategoryLogger, activitySource).ConfigureAwait(false);
 
             Console.WriteLine($"{pid} EventPipeTracee: signal end of test data");
             Console.Out.Flush();
@@ -123,8 +128,18 @@ namespace EventPipeTracee
         }
 
         // TODO At some point we may want parameters to choose different test bodies.
-        private static async Task TestBodyCore(ILogger customCategoryLogger, ILogger appCategoryLogger)
+        private static async Task TestBodyCore(ILogger customCategoryLogger, ILogger appCategoryLogger, ActivitySource activitySource)
         {
+            using Activity activity = activitySource?.StartActivity("TestBodyCore", ActivityKind.Client);
+
+            activity.DisplayName = "Display name";
+            if (activity?.IsAllDataRequested == true)
+            {
+                activity.SetTag("custom.tag.string", "value1");
+                activity.SetTag("custom.tag.int", 18);
+            }
+            activity.SetStatus(ActivityStatusCode.Error, "Error occurred");
+
             TaskCompletionSource secondSetScopes = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource firstFinishedLogging = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource secondFinishedLogging = new(TaskCreationOptions.RunContinuationsAsynchronously);
