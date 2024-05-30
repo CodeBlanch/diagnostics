@@ -6,29 +6,15 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using Microsoft.Diagnostics.Tracing;
 
 namespace Microsoft.Diagnostics.Monitoring.EventPipe
 {
     internal static partial class TraceEventExtensions
     {
-        private static readonly Dictionary<string, ActivitySource> s_Sources = new(StringComparer.OrdinalIgnoreCase);
-        private static readonly FieldInfo s_ActivityTraceIdFieldInfo = typeof(Activity).GetField("_traceId", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new NotSupportedException("Activity _traceId field could not be found reflectively.");
-        private static readonly FieldInfo s_ActivitySpanIdFieldInfo = typeof(Activity).GetField("_spanId", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new NotSupportedException("Activity _spanId field could not be found reflectively.");
-        private static readonly FieldInfo s_ActivityParentSpanIdFieldInfo = typeof(Activity).GetField("_parentSpanId", BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new NotSupportedException("Activity _parentSpanId field could not be found reflectively.");
-        private static readonly Action<Activity, ActivityKind> s_ActivityKindPropertySetAction = (Action<Activity, ActivityKind>)Delegate.CreateDelegate(
-            typeof(Action<Activity, ActivityKind>),
-            typeof(Activity).GetProperty("Kind", BindingFlags.Instance | BindingFlags.Public)?.SetMethod ?? throw new NotSupportedException("Activity Kind property set method could not be found reflectively."));
-        private static readonly Action<Activity, ActivitySource> s_ActivitySourcePropertySetAction = (Action<Activity, ActivitySource>)Delegate.CreateDelegate(
-            typeof(Action<Activity, ActivitySource>),
-            typeof(Activity).GetProperty("Source", BindingFlags.Instance | BindingFlags.Public)?.SetMethod ?? throw new NotSupportedException("Activity Source property set method could not be found reflectively."));
+        private static readonly Dictionary<string, ActivitySourceData> s_Sources = new(StringComparer.OrdinalIgnoreCase);
 
-        public static bool TryGetActivityPayload(this TraceEvent traceEvent, [NotNullWhen(true)] out Activity? payload)
+        public static bool TryGetActivityPayload(this TraceEvent traceEvent, out ActivityData payload)
         {
             if ("Activity/Stop".Equals(traceEvent.EventName))
             {
@@ -39,16 +25,23 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
                 if (string.IsNullOrEmpty(activityName)
                     || arguments == null)
                 {
-                    payload = null;
+                    payload = default;
                     return false;
                 }
 
-                payload = new Activity(activityName);
-
-                payload.ActivityTraceFlags = ActivityTraceFlags.Recorded;
-
-                string? status = null;
+                ActivitySourceData? source = null;
+                string? displayName = null;
+                ActivityTraceId traceId = default;
+                ActivitySpanId spanId = default;
+                ActivitySpanId parentSpanId = default;
+                ActivityTraceFlags traceFlags = default;
+                ActivityKind kind = default;
+                ActivityStatusCode status = ActivityStatusCode.Unset;
                 string? statusDescription = null;
+                string? sourceVersion = null;
+                DateTime startTimeUtc = default;
+                long durationTicks = 0;
+                IReadOnlyList<KeyValuePair<string, string>>? tags = null;
 
                 foreach (IDictionary<string, object> arg in arguments)
                 {
@@ -58,121 +51,135 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
                     switch (key)
                     {
                         case "TraceId":
-                            string? traceId = value as string;
-                            if (!string.IsNullOrEmpty(traceId)
-                                && traceId != "00000000000000000000000000000000")
+                            string? traceIdValue = value as string;
+                            if (!string.IsNullOrEmpty(traceIdValue)
+                                && traceIdValue != "00000000000000000000000000000000")
                             {
-                                s_ActivityTraceIdFieldInfo.SetValue(payload, traceId);
+                                traceId = ActivityTraceId.CreateFromString(traceIdValue);
                             }
                             break;
                         case "SpanId":
-                            string? spanId = value as string;
-                            if (!string.IsNullOrEmpty(spanId)
-                                && spanId != "0000000000000000")
+                            string? spanIdValue = value as string;
+                            if (!string.IsNullOrEmpty(spanIdValue)
+                                && spanIdValue != "0000000000000000")
                             {
-                                s_ActivitySpanIdFieldInfo.SetValue(payload, spanId);
+                                spanId = ActivitySpanId.CreateFromString(spanIdValue);
                             }
                             break;
                         case "ParentSpanId":
-                            string? parentSpanID = value as string;
-                            if (!string.IsNullOrEmpty(parentSpanID)
-                                && parentSpanID != "0000000000000000")
+                            string? parentSpanIdValue = value as string;
+                            if (!string.IsNullOrEmpty(parentSpanIdValue)
+                                && parentSpanIdValue != "0000000000000000")
                             {
-                                s_ActivityParentSpanIdFieldInfo.SetValue(payload, parentSpanID);
+                                parentSpanId = ActivitySpanId.CreateFromString(parentSpanIdValue);
                             }
                             break;
+                        case "ActivityTraceFlags":
+                            traceFlags = (ActivityTraceFlags)Enum.Parse(typeof(ActivityTraceFlags), value as string);
+                            break;
                         case "Kind":
-                            s_ActivityKindPropertySetAction(payload, (ActivityKind)Enum.Parse(typeof(ActivityKind), value as string));
+                            kind = (ActivityKind)Enum.Parse(typeof(ActivityKind), value as string);
                             break;
                         case "DisplayName":
-                            string? displayName = value as string;
-                            if (!string.IsNullOrEmpty(displayName)
-                                && displayName != activityName)
+                            string? displayNameValue = value as string;
+                            if (!string.IsNullOrEmpty(displayNameValue)
+                                && displayNameValue != activityName)
                             {
-                                payload.DisplayName = displayName;
+                                displayName = displayNameValue;
                             }
 
                             break;
                         case "StartTimeTicks":
-                            payload.SetStartTime(DateTime.SpecifyKind(new DateTime(long.Parse(value as string)), DateTimeKind.Utc));
+                            startTimeUtc = DateTime.SpecifyKind(new DateTime(long.Parse(value as string)), DateTimeKind.Utc);
                             break;
                         case "DurationTicks":
-                            payload.SetEndTime(payload.StartTimeUtc.AddTicks(long.Parse(value as string)));
+                            durationTicks = long.Parse(value as string);
                             break;
                         case "Status":
-                            status = value as string;
+                            status = (ActivityStatusCode)Enum.Parse(typeof(ActivityStatusCode), value as string);
                             break;
                         case "StatusDescription":
                             statusDescription = value as string;
                             break;
                         case "Tags":
-                            string? tags = value as string;
-                            if (!string.IsNullOrEmpty(tags))
+                            string? tagsValue = value as string;
+                            if (!string.IsNullOrEmpty(tagsValue))
                             {
-                                ParseTags(payload, tags);
+                                tags = ParseTags(tagsValue);
                             }
+                            break;
+                        case "ActivitySourceVersion":
+                            sourceVersion = value as string;
                             break;
                     }
                 }
 
-                if (!string.IsNullOrEmpty(status))
-                {
-                    payload.SetStatus(
-                        (ActivityStatusCode)Enum.Parse(typeof(ActivityStatusCode), status),
-                        statusDescription);
-                }
-
                 if (!string.IsNullOrEmpty(sourceName))
                 {
-                    if (!s_Sources.TryGetValue(sourceName, out ActivitySource activitySource))
+                    if (!s_Sources.TryGetValue(sourceName, out source))
                     {
-                        activitySource = new(sourceName);
-                        s_Sources[sourceName] = activitySource;
+                        source = new(sourceName, sourceVersion);
+                        s_Sources[sourceName] = source;
                     }
 
-                    s_ActivitySourcePropertySetAction(payload, activitySource);
                 }
 
-                payload.Stop();
-
+                payload = new ActivityData(
+                    source,
+                    activityName,
+                    displayName,
+                    kind,
+                    traceId,
+                    spanId,
+                    parentSpanId,
+                    traceFlags,
+                    startTimeUtc,
+                    startTimeUtc + TimeSpan.FromTicks(durationTicks),
+                    tags ?? Array.Empty<KeyValuePair<string, string>>(),
+                    status,
+                    statusDescription);
                 return true;
             }
 
-            payload = null;
+            payload = default;
             return false;
         }
 
-        private static void ParseTags(Activity payload, string tags)
+        private static IReadOnlyList<KeyValuePair<string, string>>? ParseTags(string tagsValue)
         {
-            for (int i = 0; i < tags.Length; i++)
+            List<KeyValuePair<string, string>> tags = new(64);
+
+            for (int i = 0; i < tagsValue.Length; i++)
             {
-                if (tags[i++] != '[')
+                if (tagsValue[i++] != '[')
                 {
                     break;
                 }
 
-                int commaPosition = tags.IndexOf(',', i);
+                int commaPosition = tagsValue.IndexOf(',', i);
                 if (commaPosition < 0)
                 {
                     break;
                 }
 
-                string key = tags.Substring(i, commaPosition - i);
+                string key = tagsValue.Substring(i, commaPosition - i);
 
                 i = commaPosition + 2;
 
-                int endPosition = tags.IndexOf("]", i);
+                int endPosition = tagsValue.IndexOf("]", i);
                 if (endPosition < 0)
                 {
                     break;
                 }
 
-                string value = tags.Substring(i, endPosition - i);
+                string value = tagsValue.Substring(i, endPosition - i);
 
                 i = endPosition + 1;
 
-                payload.SetTag(key, value);
+                tags.Add(new(key, value));
             }
+
+            return tags;
         }
     }
 }

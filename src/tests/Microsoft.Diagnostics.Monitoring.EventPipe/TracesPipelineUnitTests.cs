@@ -38,7 +38,7 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe.UnitTests
 
                 await using TracesPipeline pipeline = new(client, new TracesPipelineSettings
                 {
-                    ActivitySourceNames = new[] { "*" },
+                    Sources = new[] { "*" },
                     Duration = Timeout.InfiniteTimeSpan,
                 }, new[] { logger });
 
@@ -53,18 +53,22 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe.UnitTests
 
             Assert.Equal("TestBodyCore", activity.OperationName);
             Assert.Equal("Display name", activity.DisplayName);
-            Assert.True(activity.IsStopped);
             Assert.NotEqual(default, activity.TraceId);
             Assert.NotEqual(default, activity.SpanId);
+            Assert.Equal(default, activity.ParentSpanId);
+            Assert.Equal(ActivityTraceFlags.Recorded, activity.TraceFlags);
             Assert.Equal(ActivityKind.Client, activity.Kind);
-            Assert.NotEqual(TimeSpan.Zero, activity.Duration);
+            Assert.NotEqual(default, activity.StartTimeUtc);
+            Assert.NotEqual(default, activity.EndTimeUtc);
+            Assert.NotEqual(TimeSpan.Zero, activity.EndTimeUtc - activity.StartTimeUtc);
             Assert.Equal(ActivityStatusCode.Error, activity.Status);
             Assert.Equal("Error occurred", activity.StatusDescription);
 
             Assert.NotNull(activity.Source);
             Assert.Equal("EventPipeTracee.ActivitySource", activity.Source.Name);
+            Assert.Equal("1.0.0", activity.Source.Version);
 
-            Dictionary<string, object> tags = activity.TagObjects.ToDictionary(
+            Dictionary<string, string> tags = activity.Tags.ToDictionary(
                 i => i.Key,
                 i => i.Value);
             Assert.Equal("value1", tags["custom.tag.string"]);
@@ -73,9 +77,9 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe.UnitTests
 
         private sealed class TestActivityLogger : IActivityLogger
         {
-            public List<Activity> LoggedActivities { get; } = new();
+            public List<ActivityData> LoggedActivities { get; } = new();
 
-            public void Log(Activity activity)
+            public void Log(in ActivityData activity)
             {
                 LoggedActivities.Add(activity);
             }

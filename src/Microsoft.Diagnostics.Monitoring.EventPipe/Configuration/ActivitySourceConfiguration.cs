@@ -1,6 +1,8 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.Tracing;
@@ -14,7 +16,7 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
     {
         private readonly string[] _ActivitySourceNames;
 
-        public ActivitySourceConfiguration(IEnumerable<string> activitySourceNames)
+        public ActivitySourceConfiguration(IEnumerable<string>? activitySourceNames)
         {
             _ActivitySourceNames = activitySourceNames?.ToArray() ?? Array.Empty<string>();
         }
@@ -24,7 +26,12 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
             StringBuilder filterAndPayloadSpecs = new();
             foreach (string activitySource in _ActivitySourceNames)
             {
-                filterAndPayloadSpecs.AppendLine($"[AS]{activitySource}/Stop:-TraceId;SpanId;ParentSpanId;Kind;DisplayName;StartTimeTicks=StartTimeUtc.Ticks;DurationTicks=Duration.Ticks;Status;StatusDescription;Tags=TagObjects.*Enumerate");
+                if (string.IsNullOrEmpty(activitySource))
+                {
+                    continue;
+                }
+
+                filterAndPayloadSpecs.AppendLine($"[AS]{activitySource}/Stop:-TraceId;SpanId;ParentSpanId;ActivityTraceFlags;Kind;DisplayName;StartTimeTicks=StartTimeUtc.Ticks;DurationTicks=Duration.Ticks;Status;StatusDescription;Tags=TagObjects.*Enumerate;ActivitySourceVersion=Source.Version");
             }
 
             return new[] {

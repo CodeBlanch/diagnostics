@@ -1,6 +1,8 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -32,9 +34,9 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
             eventSource.Dynamic.All += traceEvent => {
                 try
                 {
-                    if (traceEvent.TryGetActivityPayload(out Activity activityPayload))
+                    if (traceEvent.TryGetActivityPayload(out ActivityData activityPayload))
                     {
-                        ExecuteCounterLoggerAction((logger) => logger.Log(activityPayload));
+                        ExecuteCounterLoggerAction((logger) => logger.Log(in activityPayload));
                     }
                 }
                 catch (Exception)
