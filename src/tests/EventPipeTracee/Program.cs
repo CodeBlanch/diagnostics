@@ -130,15 +130,29 @@ namespace EventPipeTracee
         // TODO At some point we may want parameters to choose different test bodies.
         private static async Task TestBodyCore(ILogger customCategoryLogger, ILogger appCategoryLogger, ActivitySource activitySource)
         {
-            using Activity activity = activitySource?.StartActivity("TestBodyCore", ActivityKind.Client);
+            using Activity activity = activitySource?.StartActivity(
+                name: "TestBodyCore",
+                kind: ActivityKind.Client,
+                links: new ActivityLink[] {
+                    new ActivityLink(
+                        ActivityContext.Parse(
+                            traceParent: "00-99d43cb30a4cdb4fbeee3a19c29201b0-e82825765f051b47-01",
+                            traceState: "k1=v1;k2=v2"))
+                });
 
-            activity.DisplayName = "Display name";
-            if (activity?.IsAllDataRequested == true)
+            if (activity != null)
             {
-                activity.SetTag("custom.tag.string", "value1");
-                activity.SetTag("custom.tag.int", 18);
+                activity.DisplayName = "Display name";
+                if (activity.IsAllDataRequested)
+                {
+                    activity.SetTag("custom.tag.string", "value1");
+                    activity.SetTag("custom.tag.int", 18);
+                }
+                activity.SetStatus(ActivityStatusCode.Error, "Error occurred");
+                activity.AddEvent(new ActivityEvent(
+                    name: "MyEvent",
+                    tags: new ActivityTagsCollection { ["tag1"] = "value1", ["tag2"] = 18 }));
             }
-            activity.SetStatus(ActivityStatusCode.Error, "Error occurred");
 
             TaskCompletionSource secondSetScopes = new(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskCompletionSource firstFinishedLogging = new(TaskCreationOptions.RunContinuationsAsynchronously);
