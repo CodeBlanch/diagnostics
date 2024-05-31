@@ -31,7 +31,10 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
                     continue;
                 }
 
-                // Note: It isn't currently possible to get Events or Links off of Activity using this mechanism: Events=Events.*Enumerate;Links=Links.*Enumerate;
+                // Note: It isn't currently possible to get Events or Links off
+                // of Activity using this mechanism:
+                // Events=Events.*Enumerate;Links=Links.*Enumerate; See:
+                // https://github.com/dotnet/runtime/issues/102924
 
                 filterAndPayloadSpecs.AppendLine($"[AS]{activitySource}/Stop:-TraceId;SpanId;ParentSpanId;ActivityTraceFlags;Kind;DisplayName;StartTimeTicks=StartTimeUtc.Ticks;DurationTicks=Duration.Ticks;Status;StatusDescription;Tags=TagObjects.*Enumerate;ActivitySourceVersion=Source.Version");
             }
