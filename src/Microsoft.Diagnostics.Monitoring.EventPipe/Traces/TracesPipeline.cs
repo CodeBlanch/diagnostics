@@ -6,6 +6,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Diagnostics.NETCore.Client;
@@ -15,13 +16,13 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
 {
     internal class TracesPipeline : EventSourcePipeline<TracesPipelineSettings>
     {
-        private readonly IEnumerable<IActivityLogger> _loggers;
+        private readonly IActivityLogger[] _loggers;
 
         public TracesPipeline(DiagnosticsClient client,
             TracesPipelineSettings settings,
             IEnumerable<IActivityLogger> loggers) : base(client, settings)
         {
-            _loggers = loggers ?? throw new ArgumentNullException(nameof(loggers));
+            _loggers = loggers?.ToArray() ?? throw new ArgumentNullException(nameof(loggers));
         }
 
         protected override MonitoringSourceConfiguration CreateConfiguration()
@@ -34,9 +35,20 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
             eventSource.Dynamic.All += traceEvent => {
                 try
                 {
-                    if (traceEvent.TryGetActivityPayload(out ActivityData activityPayload))
+                    if (traceEvent.TryGetActivityPayload(out ActivityPayload activity))
                     {
-                        ExecuteCounterLoggerAction((logger) => logger.Log(in activityPayload));
+                        foreach (IActivityLogger logger in _loggers)
+                        {
+                            try
+                            {
+                                logger.Log(
+                                    in activity.ActivityData,
+                                    activity.Tags);
+                            }
+                            catch (ObjectDisposedException)
+                            {
+                            }
+                        }
                     }
                 }
                 catch (Exception)
@@ -69,18 +81,6 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
             }
         }
 
-        private void ExecuteCounterLoggerAction(Action<IActivityLogger> action)
-        {
-            foreach (IActivityLogger logger in _loggers)
-            {
-                try
-                {
-                    action(logger);
-                }
-                catch (ObjectDisposedException)
-                {
-                }
-            }
-        }
+
     }
 }

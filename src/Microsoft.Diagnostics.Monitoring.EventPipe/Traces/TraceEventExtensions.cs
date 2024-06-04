@@ -12,9 +12,11 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
 {
     internal static partial class TraceEventExtensions
     {
+        [ThreadStatic]
+        private static KeyValuePair<string, object?>[]? s_TagStorage;
         private static readonly Dictionary<string, ActivitySourceData> s_Sources = new(StringComparer.OrdinalIgnoreCase);
 
-        public static bool TryGetActivityPayload(this TraceEvent traceEvent, out ActivityData payload)
+        public static bool TryGetActivityPayload(this TraceEvent traceEvent, out ActivityPayload payload)
         {
             if ("Activity/Stop".Equals(traceEvent.EventName))
             {
@@ -41,7 +43,7 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
                 string? sourceVersion = null;
                 DateTime startTimeUtc = default;
                 long durationTicks = 0;
-                IReadOnlyList<KeyValuePair<string, string>>? tags = null;
+                int tagCount = 0;
 
                 foreach (IDictionary<string, object> arg in arguments)
                 {
@@ -75,10 +77,16 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
                             }
                             break;
                         case "ActivityTraceFlags":
-                            traceFlags = (ActivityTraceFlags)Enum.Parse(typeof(ActivityTraceFlags), value as string);
+                            if (value is string traceFlagsValue)
+                            {
+                                traceFlags = (ActivityTraceFlags)Enum.Parse(typeof(ActivityTraceFlags), traceFlagsValue);
+                            }
                             break;
                         case "Kind":
-                            kind = (ActivityKind)Enum.Parse(typeof(ActivityKind), value as string);
+                            if (value is string kindValue)
+                            {
+                                kind = (ActivityKind)Enum.Parse(typeof(ActivityKind), kindValue);
+                            }
                             break;
                         case "DisplayName":
                             string? displayNameValue = value as string;
@@ -90,13 +98,22 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
 
                             break;
                         case "StartTimeTicks":
-                            startTimeUtc = DateTime.SpecifyKind(new DateTime(long.Parse(value as string)), DateTimeKind.Utc);
+                            if (value is string startTimeUtcValue)
+                            {
+                                startTimeUtc = DateTime.SpecifyKind(new DateTime(long.Parse(startTimeUtcValue)), DateTimeKind.Utc);
+                            }
                             break;
                         case "DurationTicks":
-                            durationTicks = long.Parse(value as string);
+                            if (value is string durationTicksValue)
+                            {
+                                durationTicks = long.Parse(durationTicksValue);
+                            }
                             break;
                         case "Status":
-                            status = (ActivityStatusCode)Enum.Parse(typeof(ActivityStatusCode), value as string);
+                            if (value is string statusValue)
+                            {
+                                status = (ActivityStatusCode)Enum.Parse(typeof(ActivityStatusCode), statusValue);
+                            }
                             break;
                         case "StatusDescription":
                             statusDescription = value as string;
@@ -105,7 +122,7 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
                             string? tagsValue = value as string;
                             if (!string.IsNullOrEmpty(tagsValue))
                             {
-                                tags = ParseTags(tagsValue);
+                                tagCount = ParseTags(tagsValue);
                             }
                             break;
                         case "ActivitySourceVersion":
@@ -124,7 +141,7 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
 
                 }
 
-                payload = new ActivityData(
+                payload.ActivityData = new ActivityData(
                     source,
                     activityName,
                     displayName,
@@ -135,9 +152,11 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
                     traceFlags,
                     startTimeUtc,
                     startTimeUtc + TimeSpan.FromTicks(durationTicks),
-                    tags ?? Array.Empty<KeyValuePair<string, string>>(),
                     status,
                     statusDescription);
+
+                payload.Tags = new(s_TagStorage, 0, tagCount);
+
                 return true;
             }
 
@@ -145,9 +164,12 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
             return false;
         }
 
-        private static IReadOnlyList<KeyValuePair<string, string>>? ParseTags(string tagsValue)
+        private static int ParseTags(string tagsValue)
         {
-            List<KeyValuePair<string, string>> tags = new(64);
+            ref KeyValuePair<string, object?>[]? tags = ref s_TagStorage;
+            tags ??= new KeyValuePair<string, object?>[16];
+
+            int tagCount = 0;
 
             for (int i = 0; i < tagsValue.Length; i++)
             {
@@ -176,10 +198,22 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
 
                 i = endPosition + 1;
 
-                tags.Add(new(key, value));
+                AddToArrayGrowingAsNeeded(ref tags, new(key, value), ref tagCount);
             }
 
-            return tags;
+            return tagCount;
+        }
+
+        private static void AddToArrayGrowingAsNeeded<T>(ref T[] destination, T item, ref int index)
+        {
+            if (index >= destination.Length)
+            {
+                T[] newArray = new T[destination.Length * 2];
+                Array.Copy(destination, newArray, destination.Length);
+                destination = newArray;
+            }
+
+            destination[index++] = item;
         }
     }
 }

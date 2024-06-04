@@ -1,6 +1,8 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#nullable enable
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -49,7 +51,9 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe.UnitTests
 
             Assert.Single(logger.LoggedActivities);
 
-            var activity = logger.LoggedActivities[0];
+            var activityData = logger.LoggedActivities[0];
+
+            var activity = activityData.Item1;
 
             Assert.Equal("TestBodyCore", activity.OperationName);
             Assert.Equal("Display name", activity.DisplayName);
@@ -68,7 +72,7 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe.UnitTests
             Assert.Equal("EventPipeTracee.ActivitySource", activity.Source.Name);
             Assert.Equal("1.0.0", activity.Source.Version);
 
-            Dictionary<string, string> tags = activity.Tags.ToDictionary(
+            Dictionary<string, object?> tags = activityData.Item2.ToDictionary(
                 i => i.Key,
                 i => i.Value);
             Assert.Equal("value1", tags["custom.tag.string"]);
@@ -77,11 +81,13 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe.UnitTests
 
         private sealed class TestActivityLogger : IActivityLogger
         {
-            public List<ActivityData> LoggedActivities { get; } = new();
+            public List<(ActivityData, KeyValuePair<string, object?>[])> LoggedActivities { get; } = new();
 
-            public void Log(in ActivityData activity)
+            public void Log(
+                in ActivityData activity,
+                ReadOnlySpan<KeyValuePair<string, object?>> tags)
             {
-                LoggedActivities.Add(activity);
+                LoggedActivities.Add((activity, tags.ToArray()));
             }
 
             public Task PipelineStarted(CancellationToken token) => Task.CompletedTask;

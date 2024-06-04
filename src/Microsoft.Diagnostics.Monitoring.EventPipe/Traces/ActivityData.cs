@@ -4,7 +4,6 @@
 #nullable enable
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 
 namespace Microsoft.Diagnostics.Monitoring.EventPipe
@@ -22,7 +21,6 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
             ActivityTraceFlags traceFlags,
             DateTime startTimeUtc,
             DateTime endTimeUtc,
-            IReadOnlyList<KeyValuePair<string, string>> tags,
             ActivityStatusCode status,
             string? statusDescription)
         {
@@ -41,35 +39,32 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
             TraceFlags = traceFlags;
             StartTimeUtc = startTimeUtc;
             EndTimeUtc = endTimeUtc;
-            Tags = tags ?? throw new ArgumentNullException(nameof(tags));
             Status = status;
             StatusDescription = statusDescription;
         }
 
-        public ActivitySourceData? Source { get; }
+        public readonly ActivitySourceData? Source;
 
-        public string OperationName { get; }
+        public readonly string OperationName;
 
-        public string? DisplayName { get; }
+        public readonly string? DisplayName;
 
-        public ActivityKind Kind { get; }
+        public readonly ActivityKind Kind;
 
-        public ActivityTraceId TraceId { get; }
+        public readonly ActivityTraceId TraceId;
 
-        public ActivitySpanId SpanId { get; }
+        public readonly ActivitySpanId SpanId;
 
-        public ActivitySpanId ParentSpanId { get; }
+        public readonly ActivitySpanId ParentSpanId;
 
-        public ActivityTraceFlags TraceFlags { get; }
+        public readonly ActivityTraceFlags TraceFlags;
 
-        public DateTime StartTimeUtc { get; }
+        public readonly DateTime StartTimeUtc;
 
-        public DateTime EndTimeUtc { get; }
+        public readonly DateTime EndTimeUtc;
 
-        public IReadOnlyList<KeyValuePair<string, string>> Tags { get; }
+        public readonly ActivityStatusCode Status;
 
-        public ActivityStatusCode Status { get; }
-
-        public string? StatusDescription { get; }
+        public readonly string? StatusDescription;
     }
 }
