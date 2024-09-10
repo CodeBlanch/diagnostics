@@ -49,7 +49,7 @@ namespace Microsoft.Diagnostics.NETCore.Client
                 throw new ApplicationException($"ProcessEnvironment continuation length did not match expected length. Expected: {ExpectedSizeInBytes} bytes, Received: {envBlock.Length} bytes");
             }
 
-            Dictionary<string, string> env = new();
+            Dictionary<string, string> env = new(StringComparer.OrdinalIgnoreCase);
             int cursor = 0;
             cursor += sizeof(uint);
             while (cursor < envBlock.Length)

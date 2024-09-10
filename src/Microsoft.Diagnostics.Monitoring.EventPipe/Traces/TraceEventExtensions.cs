@@ -20,7 +20,7 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
         {
             if ("Activity/Stop".Equals(traceEvent.EventName))
             {
-                string? sourceName = traceEvent.PayloadValue(0) as string;
+                string sourceName = (traceEvent.PayloadValue(0) as string) ?? string.Empty;
                 string? activityName = traceEvent.PayloadValue(1) as string;
                 Array? arguments = traceEvent.PayloadValue(2) as Array;
 
@@ -31,12 +31,13 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
                     return false;
                 }
 
-                ActivitySourceData? source = null;
+                ActivitySourceData source;
                 string? displayName = null;
                 ActivityTraceId traceId = default;
                 ActivitySpanId spanId = default;
                 ActivitySpanId parentSpanId = default;
                 ActivityTraceFlags traceFlags = default;
+                string? traceState = null;
                 ActivityKind kind = default;
                 ActivityStatusCode status = ActivityStatusCode.Unset;
                 string? statusDescription = null;
@@ -81,6 +82,9 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
                             {
                                 traceFlags = (ActivityTraceFlags)Enum.Parse(typeof(ActivityTraceFlags), traceFlagsValue);
                             }
+                            break;
+                        case "TraceStateString":
+                            traceState = value as string;
                             break;
                         case "Kind":
                             if (value is string kindValue)
@@ -131,14 +135,10 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
                     }
                 }
 
-                if (!string.IsNullOrEmpty(sourceName))
+                if (!s_Sources.TryGetValue(sourceName, out source))
                 {
-                    if (!s_Sources.TryGetValue(sourceName, out source))
-                    {
-                        source = new(sourceName, sourceVersion);
-                        s_Sources[sourceName] = source;
-                    }
-
+                    source = new(sourceName, sourceVersion);
+                    s_Sources[sourceName] = source;
                 }
 
                 payload.ActivityData = new ActivityData(
@@ -150,6 +150,7 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
                     spanId,
                     parentSpanId,
                     traceFlags,
+                    traceState,
                     startTimeUtc,
                     startTimeUtc + TimeSpan.FromTicks(durationTicks),
                     status,

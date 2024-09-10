@@ -14,10 +14,14 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
 {
     public sealed class ActivitySourceConfiguration : MonitoringSourceConfiguration
     {
+        private readonly double _SamplingRatio;
         private readonly string[] _ActivitySourceNames;
 
-        public ActivitySourceConfiguration(IEnumerable<string>? activitySourceNames)
+        public ActivitySourceConfiguration(
+            double samplingRatio,
+            IEnumerable<string>? activitySourceNames)
         {
+            _SamplingRatio = samplingRatio;
             _ActivitySourceNames = activitySourceNames?.ToArray() ?? Array.Empty<string>();
         }
 
@@ -36,7 +40,9 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
                 // Events=Events.*Enumerate;Links=Links.*Enumerate; See:
                 // https://github.com/dotnet/runtime/issues/102924
 
-                filterAndPayloadSpecs.AppendLine($"[AS]{activitySource}/Stop:-TraceId;SpanId;ParentSpanId;ActivityTraceFlags;Kind;DisplayName;StartTimeTicks=StartTimeUtc.Ticks;DurationTicks=Duration.Ticks;Status;StatusDescription;Tags=TagObjects.*Enumerate;ActivitySourceVersion=Source.Version");
+                // todo: Support sampling added in .NET 9
+
+                filterAndPayloadSpecs.AppendLine($"[AS]{activitySource}/Stop:-TraceId;SpanId;ParentSpanId;ActivityTraceFlags;TraceStateString;Kind;DisplayName;StartTimeTicks=StartTimeUtc.Ticks;DurationTicks=Duration.Ticks;Status;StatusDescription;Tags=TagObjects.*Enumerate;ActivitySourceVersion=Source.Version");
             }
 
             return new[] {

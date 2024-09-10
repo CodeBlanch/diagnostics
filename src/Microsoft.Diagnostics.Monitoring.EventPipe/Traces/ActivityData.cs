@@ -11,7 +11,7 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
     internal readonly struct ActivityData
     {
         public ActivityData(
-            ActivitySourceData? source,
+            ActivitySourceData source,
             string operationName,
             string? displayName,
             ActivityKind kind,
@@ -19,6 +19,7 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
             ActivitySpanId spanId,
             ActivitySpanId parentSpanId,
             ActivityTraceFlags traceFlags,
+            string? traceState,
             DateTime startTimeUtc,
             DateTime endTimeUtc,
             ActivityStatusCode status,
@@ -37,13 +38,14 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
             SpanId = spanId;
             ParentSpanId = parentSpanId;
             TraceFlags = traceFlags;
+            TraceState = traceState;
             StartTimeUtc = startTimeUtc;
             EndTimeUtc = endTimeUtc;
             Status = status;
             StatusDescription = statusDescription;
         }
 
-        public readonly ActivitySourceData? Source;
+        public readonly ActivitySourceData Source;
 
         public readonly string OperationName;
 
@@ -58,6 +60,8 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
         public readonly ActivitySpanId ParentSpanId;
 
         public readonly ActivityTraceFlags TraceFlags;
+
+        public readonly string? TraceState;
 
         public readonly DateTime StartTimeUtc;
 

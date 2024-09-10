@@ -26,7 +26,7 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
         }
 
         protected override MonitoringSourceConfiguration CreateConfiguration()
-            => new ActivitySourceConfiguration(Settings.Sources);
+            => new ActivitySourceConfiguration(Settings.SamplingRatio, Settings.Sources);
 
         protected override async Task OnEventSourceAvailable(EventPipeEventSource eventSource, Func<Task> stopSessionAsync, CancellationToken token)
         {

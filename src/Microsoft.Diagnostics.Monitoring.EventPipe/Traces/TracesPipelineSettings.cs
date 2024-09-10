@@ -7,6 +7,8 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
 {
     internal class TracesPipelineSettings : EventSourcePipelineSettings
     {
+        public double SamplingRatio { get; set; } = 1.0D;
+
         public string[]? Sources { get; set; }
     }
 }
