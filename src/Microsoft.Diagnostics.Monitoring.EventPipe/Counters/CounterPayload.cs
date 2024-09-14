@@ -105,6 +105,8 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
         {
         }
 
+        public abstract bool SupportsDelta { get; }
+
         public virtual void Combine(MeterInstrumentDeltaMeasurementPayload other)
         {
             if (other.Timestamp > Timestamp)
@@ -142,6 +144,8 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
         }
 
         public double Rate { get; private set; }
+
+        public override bool SupportsDelta => false;
 
         public override void Combine(MeterInstrumentDeltaMeasurementPayload other)
         {
@@ -188,6 +192,8 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
 
         public double Rate => Value;
 
+        public override bool SupportsDelta => true;
+
         public override void Combine(MeterInstrumentDeltaMeasurementPayload other)
         {
             Value += other.Value;
@@ -213,6 +219,8 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
         }
 
         public double Rate { get; private set; }
+
+        public override bool SupportsDelta => true;
 
         public override void Combine(MeterInstrumentDeltaMeasurementPayload other)
         {
@@ -260,6 +268,8 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
         public double Sum { get; private set; }
 
         public Quantile[] Quantiles { get; private set; }
+
+        public override bool SupportsDelta => true;
 
         public override void Combine(MeterInstrumentDeltaMeasurementPayload other)
         {
