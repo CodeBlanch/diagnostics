@@ -16,11 +16,6 @@
 
   <CliPath>$(DotNetRoot)/dotnet</CliPath>
 
-  <NuGetPackageFeeds>
-      dotnet9=https://dnceng.pkgs.visualstudio.com/public/_packaging/dotnet9/nuget/v3/index.json;
-      dotnet-public=https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json
-  </NuGetPackageFeeds>
-
   <Options>
     <!--
         Default (prebuilt)
@@ -39,9 +34,9 @@
     </Option>
   </Options>
 
+  <BuildProjectFramework Condition="StartsWith('$(RuntimeFrameworkVersion)', '10')">net10.0</BuildProjectFramework>
   <BuildProjectFramework Condition="StartsWith('$(RuntimeFrameworkVersion)', '9')">net9.0</BuildProjectFramework>
   <BuildProjectFramework Condition="StartsWith('$(RuntimeFrameworkVersion)', '8')">net8.0</BuildProjectFramework>
-  <BuildProjectFramework Condition="StartsWith('$(RuntimeFrameworkVersion)', '7')">net7.0</BuildProjectFramework>
   <BuildProjectFramework Condition="StartsWith('$(RuntimeFrameworkVersion)', '6')">net6.0</BuildProjectFramework>
 
   <!-- Single-file debuggees don't need the host -->

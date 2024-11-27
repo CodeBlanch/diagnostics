@@ -45,7 +45,7 @@ namespace Microsoft.Diagnostics.Tools.Trace
         /// <param name="buffersize">Sets the size of the in-memory circular buffer in megabytes.</param>
         /// <param name="providers">A list of EventPipe providers to be enabled. This is in the form 'Provider[,Provider]', where Provider is in the form: 'KnownProviderName[:Flags[:Level][:KeyValueArgs]]', and KeyValueArgs is in the form: '[key1=value1][;key2=value2]'</param>
         /// <param name="profile">A named pre-defined set of provider configurations that allows common tracing scenarios to be specified succinctly.</param>
-        /// <param name="format">The desired format of the created trace file.</param>
+        /// <param name="format">If not using the default NetTrace format, an additional file will be emitted with the specified format under the same output name and with the corresponding format extension.</param>
         /// <param name="duration">The duration of trace to be taken. </param>
         /// <param name="clrevents">A list of CLR events to be emitted.</param>
         /// <param name="clreventlevel">The verbosity level of CLR events</param>
@@ -125,7 +125,8 @@ namespace Microsoft.Diagnostics.Tools.Trace
                     enabledBy[providerCollectionProvider.Name] = "--providers ";
                 }
 
-                bool collectRundownEvents = true;
+                long rundownKeyword = EventPipeSession.DefaultRundownKeyword;
+                RetryStrategy retryStrategy = RetryStrategy.NothingToRetry;
 
                 if (profile.Length != 0)
                 {
@@ -137,14 +138,24 @@ namespace Microsoft.Diagnostics.Tools.Trace
                         return (int)ReturnCode.ArgumentError;
                     }
 
-                    collectRundownEvents = selectedProfile.Rundown;
+                    rundownKeyword = selectedProfile.RundownKeyword;
+                    retryStrategy = selectedProfile.RetryStrategy;
 
                     Profile.MergeProfileAndProviders(selectedProfile, providerCollection, enabledBy);
                 }
 
                 if (rundown.HasValue)
                 {
-                    collectRundownEvents = rundown.Value;
+                    if (rundown.Value)
+                    {
+                        rundownKeyword |= EventPipeSession.DefaultRundownKeyword;
+                        retryStrategy = (rundownKeyword == EventPipeSession.DefaultRundownKeyword) ? RetryStrategy.NothingToRetry : RetryStrategy.DropKeywordKeepRundown;
+                    }
+                    else
+                    {
+                        rundownKeyword = 0;
+                        retryStrategy = RetryStrategy.NothingToRetry;
+                    }
                 }
 
                 // Parse --clrevents parameter
@@ -271,30 +282,65 @@ namespace Microsoft.Diagnostics.Tools.Trace
                         EventPipeSession session = null;
                         try
                         {
-                            session = diagnosticsClient.StartEventPipeSession(providerCollection, collectRundownEvents, (int)buffersize);
-                            if (resumeRuntime)
-                            {
-                                try
-                                {
-                                    diagnosticsClient.ResumeRuntime();
-                                }
-                                catch (UnsupportedCommandException)
-                                {
-                                    // Noop if command is unsupported, since the target is most likely a 3.1 app.
-                                }
-                            }
+                            EventPipeSessionConfiguration config = new(providerCollection, (int)buffersize, rundownKeyword: rundownKeyword, requestStackwalk: true);
+                            session = diagnosticsClient.StartEventPipeSession(config);
                         }
-                        catch (DiagnosticsClientException e)
+                        catch (UnsupportedCommandException e)
                         {
-                            Console.Error.WriteLine($"Unable to start a tracing session: {e}");
-                            return (int)ReturnCode.SessionCreationError;
+                            if (retryStrategy == RetryStrategy.DropKeywordKeepRundown)
+                            {
+                                Console.Error.WriteLine("The runtime version being traced doesn't support the custom rundown feature used by this tracing configuration, retrying with the standard rundown keyword");
+                                //
+                                // If you are building new profiles or options, you can test with these asserts to make sure you are writing
+                                // the retry strategies correctly.
+                                //
+                                // If these assert ever fires, it means something is wrong with the option generation logic leading to unnecessary retries.
+                                // unnecessary retries is not fatal.
+                                //
+                                // Debug.Assert(rundownKeyword != 0);
+                                // Debug.Assert(rundownKeyword != EventPipeSession.DefaultRundownKeyword);
+                                //
+                                EventPipeSessionConfiguration config = new(providerCollection, (int)buffersize, rundownKeyword: EventPipeSession.DefaultRundownKeyword, requestStackwalk: true);
+                                session = diagnosticsClient.StartEventPipeSession(config);
+                            }
+                            else if (retryStrategy == RetryStrategy.DropKeywordDropRundown)
+                            {
+                                Console.Error.WriteLine("The runtime version being traced doesn't support the custom rundown feature used by this tracing configuration, retrying with the rundown omitted");
+                                //
+                                // If you are building new profiles or options, you can test with these asserts to make sure you are writing
+                                // the retry strategies correctly.
+                                //
+                                // If these assert ever fires, it means something is wrong with the option generation logic leading to unnecessary retries.
+                                // unnecessary retries is not fatal.
+                                //
+                                // Debug.Assert(rundownKeyword != 0);
+                                // Debug.Assert(rundownKeyword != EventPipeSession.DefaultRundownKeyword);
+                                //
+                                EventPipeSessionConfiguration config = new(providerCollection, (int)buffersize, rundownKeyword: 0, requestStackwalk: true);
+                                session = diagnosticsClient.StartEventPipeSession(config);
+                            }
+                            else
+                            {
+                                Console.Error.WriteLine($"Unable to start a tracing session: {e}");
+                                return (int)ReturnCode.SessionCreationError;
+                            }
                         }
                         catch (UnauthorizedAccessException e)
                         {
                             Console.Error.WriteLine($"dotnet-trace does not have permission to access the specified app: {e.GetType()}");
                             return (int)ReturnCode.SessionCreationError;
                         }
-
+                        if (resumeRuntime)
+                        {
+                            try
+                            {
+                                diagnosticsClient.ResumeRuntime();
+                            }
+                            catch (UnsupportedCommandException)
+                            {
+                                // Noop if command is unsupported, since the target is most likely a 3.1 app.
+                            }
+                        }
                         if (session == null)
                         {
                             Console.Error.WriteLine("Unable to create session.");

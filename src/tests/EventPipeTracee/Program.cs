@@ -32,9 +32,11 @@ namespace EventPipeTracee
             string loggerCategory = args[1];
 
             bool diagMetrics = args.Any("DiagMetrics".Equals);
+            bool duplicateNameMetrics = args.Any("DuplicateNameMetrics".Equals);
             bool useActivitySource = args.Any("UseActivitySource".Equals);
 
             Console.WriteLine($"{pid} EventPipeTracee: DiagMetrics {diagMetrics} UseActivitySource {useActivitySource}");
+            Console.WriteLine($"{pid} EventPipeTracee: DuplicateNameMetrics {duplicateNameMetrics}");
 
             Console.WriteLine($"{pid} EventPipeTracee: start process");
             Console.Out.Flush();
@@ -65,8 +67,6 @@ namespace EventPipeTracee
             Console.WriteLine($"{pid} EventPipeTracee: {DateTime.UtcNow} Awaiting start");
             Console.Out.Flush();
 
-            using CustomMetrics metrics = diagMetrics ? new CustomMetrics() : null;
-
             // Wait for server to send something
             int input = pipeStream.ReadByte();
 
@@ -75,10 +75,14 @@ namespace EventPipeTracee
 
             CancellationTokenSource recordMetricsCancellationTokenSource = new();
 
-            if (diagMetrics)
+            if (diagMetrics || duplicateNameMetrics)
             {
                 _ = Task.Run(async () => {
 
+                    using CustomMetrics metrics = diagMetrics ? new CustomMetrics() : null;
+#if NET8_0_OR_GREATER
+                    using DuplicateNameMetrics dupMetrics = duplicateNameMetrics ? new DuplicateNameMetrics() : null;
+#endif
                     // Recording a single value appeared to cause test flakiness due to a race
                     // condition with the timing of when dotnet-counters starts collecting and
                     // when these values are published. Publishing values repeatedly bypasses this problem.
@@ -86,8 +90,11 @@ namespace EventPipeTracee
                     {
                         recordMetricsCancellationTokenSource.Token.ThrowIfCancellationRequested();
 
-                        metrics.IncrementCounter();
-                        metrics.RecordHistogram(10.0f);
+                        metrics?.IncrementCounter();
+                        metrics?.RecordHistogram(10.0f);
+#if NET8_0_OR_GREATER
+                        dupMetrics?.IncrementCounter();
+#endif
                         await Task.Delay(1000).ConfigureAwait(true);
                     }
 

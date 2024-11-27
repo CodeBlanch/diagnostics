@@ -9,8 +9,7 @@ using Microsoft.Diagnostics.DebugServices;
 using Microsoft.Diagnostics.Runtime.Utilities;
 using SOS.Hosting.DbgEng.Interop;
 
-namespace SOS.Hosting
-{
+namespace SOS.Hosting {
     internal sealed unsafe class DataTargetWrapper : COMCallableIUnknown
     {
         private static readonly Guid IID_ICLRDataTarget = new("3E11CCEE-D08B-43e5-AF01-32717A64DA03");
@@ -110,8 +109,9 @@ namespace SOS.Hosting
             {
                 Architecture.X64 => IMAGE_FILE_MACHINE.AMD64,
                 Architecture.X86 => IMAGE_FILE_MACHINE.I386,
-                Architecture.Arm => IMAGE_FILE_MACHINE.THUMB2,
+                Architecture.Arm => IMAGE_FILE_MACHINE.ARMNT,
                 Architecture.Arm64 => IMAGE_FILE_MACHINE.ARM64,
+                (Architecture)6 /* Architecture.LoongArch64 */ => IMAGE_FILE_MACHINE.LOONGARCH64,
                 (Architecture)9 /* Architecture.RiscV64 */ => IMAGE_FILE_MACHINE.RISCV64,
                 _ => IMAGE_FILE_MACHINE.UNKNOWN,
             };
@@ -220,23 +220,13 @@ namespace SOS.Hosting
             int contextSize,
             IntPtr context)
         {
-            byte[] registerContext;
             try
             {
-                registerContext = _threadService.GetThreadFromId(threadId).GetThreadContext();
+                _threadService.GetThreadFromId(threadId).GetThreadContext(context, contextSize);
             }
-            catch (DiagnosticsException)
+            catch (Exception ex) when (ex is DiagnosticsException or ArgumentOutOfRangeException)
             {
                 Trace.TraceError($"DataTargetWrapper.GetThreadContext({threadId:X8}) FAILED");
-                return HResult.E_FAIL;
-            }
-            try
-            {
-                Marshal.Copy(registerContext, 0, context, Math.Min(registerContext.Length, contextSize));
-            }
-            catch (Exception ex) when (ex is ArgumentOutOfRangeException or ArgumentNullException)
-            {
-                Trace.TraceError($"DataTargetWrapper.GetThreadContext Marshal.Copy FAILED {ex}");
                 return HResult.E_INVALIDARG;
             }
             return HResult.S_OK;
@@ -310,7 +300,7 @@ namespace SOS.Hosting
         private int VirtualUnwind(
             IntPtr self,
             uint threadId,
-            uint contextSize,
+            int contextSize,
             byte[] context)
         {
             try
@@ -319,7 +309,7 @@ namespace SOS.Hosting
                 {
                     return HResult.E_NOTIMPL;
                 }
-                return _threadUnwindService.Unwind(threadId, contextSize, context);
+                return _threadUnwindService.Unwind(threadId, context.AsSpan(0, contextSize));
             }
             catch (DiagnosticsException)
             {
@@ -465,7 +455,7 @@ namespace SOS.Hosting
         private delegate int VirtualUnwindDelegate(
             [In] IntPtr self,
             [In] uint threadId,
-            [In] uint contextSize,
+            [In] int contextSize,
             [In, Out, MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 2)] byte[] context);
 
         #endregion

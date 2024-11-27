@@ -482,7 +482,7 @@ namespace SOS.Hosting
                 if (_symbolService is null)
                 {
                     _symbolService = new SymbolService(this);
-                    _symbolService.AddSymbolServer(msdl: true, symweb: false, timeoutInMinutes: 6, retryCount: 5);
+                    _symbolService.AddSymbolServer(timeoutInMinutes: 6, retryCount: 5);
                     _symbolService.AddCachePath(SymbolService.DefaultSymbolCache);
                 }
                 return _symbolService;
@@ -491,15 +491,17 @@ namespace SOS.Hosting
 
         #region IHost
 
-        IServiceEvent IHost.OnShutdownEvent => throw new NotImplementedException();
+        public IServiceEvent OnShutdownEvent => throw new NotImplementedException();
 
-        IServiceEvent<ITarget> IHost.OnTargetCreate => throw new NotImplementedException();
+        public IServiceEvent<ITarget> OnTargetCreate => throw new NotImplementedException();
 
-        HostType IHost.HostType => HostType.DotnetDump;
+        public HostType HostType => HostType.DotnetDump;
 
-        IServiceProvider IHost.Services => throw new NotImplementedException();
+        public IServiceProvider Services => throw new NotImplementedException();
 
-        IEnumerable<ITarget> IHost.EnumerateTargets() => throw new NotImplementedException();
+        public IEnumerable<ITarget> EnumerateTargets() => throw new NotImplementedException();
+
+        public int AddTarget(ITarget target) => throw new NotImplementedException();
 
         #endregion
 

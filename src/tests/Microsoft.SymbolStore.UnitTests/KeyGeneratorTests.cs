@@ -28,7 +28,8 @@ namespace Microsoft.SymbolStore.Tests
             //MachCoreKeyGeneratorInternal(fileGenerator: true);
             MachOFileKeyGeneratorInternal(fileGenerator: true);
             MinidumpKeyGeneratorInternal(fileGenerator: true);
-            PDBFileKeyGeneratorInternal(fileGenerator: true);
+            PDBFileKeyGeneratorInternal(fileGenerator: true, pdz: false);
+            PDBFileKeyGeneratorInternal(fileGenerator: true, pdz: true);
             PEFileKeyGeneratorInternal(fileGenerator: true);
             PortablePDBFileKeyGeneratorInternal(fileGenerator: true);
             PerfMapFileKeyGeneratorInternal(fileGenerator: true);
@@ -348,20 +349,30 @@ namespace Microsoft.SymbolStore.Tests
         [Fact]
         public void PDBFileKeyGenerator()
         {
-            PDBFileKeyGeneratorInternal(fileGenerator: false);
+            PDBFileKeyGeneratorInternal(fileGenerator: false, pdz: false);
         }
 
-        private void PDBFileKeyGeneratorInternal(bool fileGenerator)
+        [Fact]
+        public void PDZFileKeyGenerator()
         {
-            const string TestBinary = "TestBinaries/HelloWorld.pdb";
-            using (Stream pdb = File.OpenRead(TestBinary))
+            PDBFileKeyGeneratorInternal(fileGenerator: false, pdz: true);
+        }
+
+        private void PDBFileKeyGeneratorInternal(bool fileGenerator, bool pdz)
+        {
+            using (Stream pdb = File.OpenRead(pdz ? "TestBinaries/HelloWorld.pdz" : "TestBinaries/HelloWorld.pdb"))
             {
-                var file = new SymbolStoreFile(pdb, TestBinary);
+                var file = new SymbolStoreFile(pdb, "TestBinaries/HelloWorld.pdb");
                 KeyGenerator generator = fileGenerator ? (KeyGenerator)new FileKeyGenerator(_tracer, file) : new PDBFileKeyGenerator(_tracer, file);
 
                 IEnumerable<SymbolStoreKey> identityKey = generator.GetKeys(KeyTypeFlags.IdentityKey);
                 Assert.True(identityKey.Count() == 1);
-                Assert.True(identityKey.First().Index == "helloworld.pdb/99891b3ed7ae4c3babff8a2b4a9b0c431/helloworld.pdb");
+
+                string index = pdz ?
+                    "helloworld.pdb/99891b3ed7ae4c3babff8a2b4a9b0c431/msfz0/helloworld.pdb" :
+                    "helloworld.pdb/99891b3ed7ae4c3babff8a2b4a9b0c431/helloworld.pdb";
+
+                Assert.True(identityKey.First().Index == index);
 
                 IEnumerable<SymbolStoreKey> symbolKey = generator.GetKeys(KeyTypeFlags.SymbolKey);
                 Assert.True(symbolKey.Count() == 0);
@@ -456,16 +467,16 @@ namespace Microsoft.SymbolStore.Tests
                 Assert.True(symbolKey.First().Index == "coreclr.pdb/3f3d5a3258e64ae8b86b31ff776949351/coreclr.pdb");
 
                 Dictionary<string, SymbolStoreKey> clrKeys = generator.GetKeys(KeyTypeFlags.ClrKeys).ToDictionary((key) => key.Index);
+                Assert.True(clrKeys.Count() == 3);
                 Assert.True(clrKeys.ContainsKey("mscordaccore.dll/595EBCD5538000/mscordaccore.dll"));
+                Assert.True(clrKeys.ContainsKey("mscordaccore_amd64_amd64_4.6.25505.00.dll/595EBCD5538000/mscordaccore_amd64_amd64_4.6.25505.00.dll"));
                 Assert.True(clrKeys.ContainsKey("mscordbi.dll/595EBCD5538000/mscordbi.dll"));
-                Assert.True(clrKeys.ContainsKey("sos.dll/595EBCD5538000/sos.dll"));
-                Assert.True(clrKeys.ContainsKey("sos.netcore.dll/595EBCD5538000/sos.netcore.dll"));
 
                 Dictionary<string, SymbolStoreKey> dacdbiKeys = generator.GetKeys(KeyTypeFlags.DacDbiKeys).ToDictionary((key) => key.Index);
+                Assert.True(dacdbiKeys.Count() == 3);
                 Assert.True(dacdbiKeys.ContainsKey("mscordaccore.dll/595EBCD5538000/mscordaccore.dll"));
+                Assert.True(dacdbiKeys.ContainsKey("mscordaccore_amd64_amd64_4.6.25505.00.dll/595EBCD5538000/mscordaccore_amd64_amd64_4.6.25505.00.dll"));
                 Assert.True(dacdbiKeys.ContainsKey("mscordbi.dll/595EBCD5538000/mscordbi.dll"));
-                Assert.False(dacdbiKeys.ContainsKey("sos.dll/595EBCD5538000/sos.dll"));
-                Assert.False(dacdbiKeys.ContainsKey("sos.netcore.dll/595EBCD5538000/sos.netcore.dll"));
 
                 IEnumerable<SymbolStoreKey> perfMapKey = generator.GetKeys(KeyTypeFlags.PerfMapKeys);
                 Assert.True(perfMapKey.Count() == 0);
