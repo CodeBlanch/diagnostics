@@ -68,7 +68,7 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
             CounterType counterType,
             float interval,
             int series,
-            string valueTags) : base(timestamp, new(providerName, null, name, null, null, null, null, null), displayName, unit, value, counterType, interval, series, valueTags, EventType.Gauge)
+            string valueTags) : base(timestamp, new(providerName, null, name, null, null, null, null, null, null), displayName, unit, value, counterType, interval, series, valueTags, EventType.Gauge)
         {
         }
     }

@@ -76,7 +76,7 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
             }
 
             // no pre-existing counter metadata was found, create a new one
-            metadata = new CounterMetadata(providerName, providerVersion, counterName, counterUnit, counterDescription, meterTags, instrumentTags, scopeHash);
+            metadata = new CounterMetadata(providerName, providerVersion, counterName, id, counterUnit, counterDescription, meterTags, instrumentTags, scopeHash);
             if (id.HasValue)
             {
                 counterMetadataById.TryAdd(id.Value, metadata);
@@ -104,6 +104,17 @@ namespace Microsoft.Diagnostics.Monitoring.EventPipe
             // For EventCounter based events we expect to fall through here the first time a new counter is observed
             // For MetricsEventSource events we should never reach here unless the BeginInstrumentRecording event was dropped.
             return AddCounterMetadata(providerName, counterName, id, null, null, null);
+        }
+
+        public static bool TryGetCounterMetadata(string providerName, string counterName, int? id, out CounterMetadata counterMetadata)
+        {
+            if (id.HasValue && counterMetadataById.TryGetValue(id.Value, out counterMetadata))
+            {
+                return true;
+            }
+
+            ProviderAndCounter providerAndCounter = new(providerName, counterName);
+            return counterMetadataByName.TryGetValue(providerAndCounter, out counterMetadata);
         }
 
         public static bool TryGetCounterPayload(this TraceEvent traceEvent, CounterConfiguration counterConfiguration, out ICounterPayload payload)
